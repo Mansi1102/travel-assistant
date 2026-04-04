@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Travel Assistant</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --user-bubble: #2563eb;
+      --bot-bubble: #ffffff;
+      --text: #1e293b;
+      --text-light: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 1px 3px rgba(0,0,0,.08);
+      --shadow-lg: 0 8px 30px rgba(0,0,0,.12);
+      --radius: 16px;
+      --transition: .2s ease;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ---- layout ---- */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 820px;
+      margin: 0 auto;
+      background: var(--surface);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* ---- header ---- */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; color: #fff;
+    }
+    .header-actions { display: flex; gap: 8px; }
+    .btn-icon {
+      width: 38px; height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .btn-icon:hover { background: var(--bg); border-color: #cbd5e1; }
+    .btn-icon[title]::after { content: none; }
+
+    /* ---- messages area ---- */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+
+    .msg {
+      display: flex;
+      gap: 10px;
+      max-width: 85%;
+      animation: fadeUp .3s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg.user  { align-self: flex-end; flex-direction: row-reverse; }
+    .msg.bot   { align-self: flex-start; }
+
+    .avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .95rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .msg.user .avatar { background: var(--user-bubble); color: #fff; }
+    .msg.bot  .avatar { background: linear-gradient(135deg, #2563eb, #7c3aed); color: #fff; }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      line-height: 1.55;
+      font-size: .935rem;
+      box-shadow: var(--shadow);
+      word-break: break-word;
+    }
+    .msg.user .bubble {
+      background: var(--user-bubble);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.bot .bubble {
+      background: var(--bot-bubble);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* markdown inside bot bubbles */
+    .bubble h1,.bubble h2,.bubble h3,.bubble h4 {
+      margin: 12px 0 6px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .bubble h3 { font-size: .95rem; }
+    .bubble p  { margin: 6px 0; }
+    .bubble ul,.bubble ol { margin: 6px 0 6px 20px; }
+    .bubble li { margin: 3px 0; }
+    .bubble strong { font-weight: 600; }
+    .bubble table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: .87rem; }
+    .bubble th, .bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+    .bubble th { background: var(--bg); font-weight: 600; }
+    .bubble code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-size: .88em; }
+    .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+    /* typing indicator */
+    .typing { display: flex; gap: 5px; padding: 14px 18px; }
+    .typing span {
+      width: 8px; height: 8px;
+      background: #94a3b8;
+      border-radius: 50%;
+      animation: bounce .6s infinite alternate;
+    }
+    .typing span:nth-child(2) { animation-delay: .15s; }
+    .typing span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce {
+      to { transform: translateY(-6px); opacity: .4; }
+    }
+
+    /* welcome */
+    .welcome {
+      text-align: center;
+      padding: 48px 24px;
+      animation: fadeUp .5s ease both;
+    }
+    .welcome-icon { font-size: 3rem; margin-bottom: 12px; }
+    .welcome h2 { font-size: 1.35rem; margin-bottom: 8px; }
+    .welcome p  { color: var(--text-light); font-size: .95rem; max-width: 420px; margin: 0 auto 24px; }
+    .suggestions {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+    }
+    .suggestion {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      cursor: pointer;
+      font-size: .87rem;
+      color: var(--text);
+      transition: all var(--transition);
+    }
+    .suggestion:hover {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    /* ---- input bar ---- */
+    .input-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    #userInput {
+      flex: 1;
+      resize: none;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: .935rem;
+      font-family: inherit;
+      line-height: 1.45;
+      max-height: 140px;
+      outline: none;
+      transition: border-color var(--transition);
+      background: var(--bg);
+    }
+    #userInput:focus { border-color: var(--primary); }
+    #userInput::placeholder { color: #94a3b8; }
+
+    #sendBtn {
+      width: 44px; height: 44px;
+      border: none;
+      border-radius: 14px;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition), transform var(--transition);
+      flex-shrink: 0;
+    }
+    #sendBtn:hover { background: var(--primary-hover); }
+    #sendBtn:active { transform: scale(.95); }
+    #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
+    #sendBtn svg { width: 20px; height: 20px; }
+
+    /* scrollbar */
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* responsive */
+    @media (max-width: 600px) {
+      .app { max-width: 100%; }
+      .msg { max-width: 92%; }
+      header { padding: 12px 16px; }
+      .messages { padding: 16px; }
+      .input-bar { padding: 12px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">&#9992;</div>
+        <span>Travel Assistant</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn-icon" id="resetBtn" title="New conversation">&#8635;</button>
+      </div>
+    </header>
+
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">&#127758;</div>
+        <h2>Where would you like to go?</h2>
+        <p>Ask me about destinations, itineraries, budgets, packing tips, visa info, and more.</p>
+        <div class="suggestions">
+          <button class="suggestion">Plan a 5-day Japan trip</button>
+          <button class="suggestion">Weekend getaway from NYC</button>
+          <button class="suggestion">Best beaches in Southeast Asia</button>
+          <button class="suggestion">Europe on a budget</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <textarea id="userInput" rows="1" placeholder="Ask me about your next adventure..." autocomplete="off"></textarea>
+      <button id="sendBtn" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- minimal markdown renderer (bold, headers, lists, tables, hr) -->
+  <script>
+    function renderMarkdown(text) {
+      let html = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
+      html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+      html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+      html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+      html = html.replace(/^---$/gm, "<hr>");
+
+      html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+      html = html.replace(/`(.+?)`/g, "<code>$1</code>");
+
+      // tables
+      html = html.replace(/((?:^\|.+\|$\n?)+)/gm, function(table) {
+        const rows = table.trim().split("\n");
+        let out = "<table>";
+        rows.forEach(function(row, i) {
+          if (/^\|\s*[-:]+/.test(row)) return;
+          const tag = i === 0 ? "th" : "td";
+          const cells = row.split("|").filter(function(c, j, a) { return j > 0 && j < a.length - 1; });
+          out += "<tr>" + cells.map(function(c) { return "<" + tag + ">" + c.trim() + "</" + tag + ">"; }).join("") + "</tr>";
+        });
+        return out + "</table>";
+      });
+
+      // unordered lists
+      html = html.replace(/((?:^[\t ]*[-*]\s+.+$\n?)+)/gm, function(block) {
+        const items = block.trim().split("\n").map(function(l) {
+          return "<li>" + l.replace(/^[\t ]*[-*]\s+/, "") + "</li>";
+        });
+        return "<ul>" + items.join("") + "</ul>";
+      });
+
+      // ordered lists
+      html = html.replace(/((?:^\d+\.\s+.+$\n?)+)/gm, function(block) {
+        const items = block.trim().split("\n").map(function(l) {
+          return "<li>" + l.replace(/^\d+\.\s+/, "") + "</li>";
+        });
+        return "<ol>" + items.join("") + "</ol>";
+      });
+
+      // paragraphs
+      html = html.replace(/\n{2,}/g, "</p><p>");
+      html = "<p>" + html + "</p>";
+      html = html.replace(/<p>\s*(<h[1-4]|<ul|<ol|<table|<hr)/g, "$1");
+      html = html.replace(/(<\/h[1-4]>|<\/ul>|<\/ol>|<\/table>|<hr>)\s*<\/p>/g, "$1");
+      html = html.replace(/<p>\s*<\/p>/g, "");
+
+      return html;
+    }
+
+    const messagesEl = document.getElementById("messages");
+    const inputEl    = document.getElementById("userInput");
+    const sendBtn    = document.getElementById("sendBtn");
+    const resetBtn   = document.getElementById("resetBtn");
+    const welcomeEl  = document.getElementById("welcome");
+
+    let busy = false;
+
+    function scrollBottom() {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addMessage(role, content) {
+      if (welcomeEl) welcomeEl.remove();
+
+      const wrap = document.createElement("div");
+      wrap.className = "msg " + role;
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = role === "user" ? "\u{1F464}" : "\u2708";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+
+      if (role === "bot") {
+        bubble.innerHTML = renderMarkdown(content);
+      } else {
+        bubble.textContent = content;
+      }
+
+      wrap.appendChild(avatar);
+      wrap.appendChild(bubble);
+      messagesEl.appendChild(wrap);
+      scrollBottom();
+      return wrap;
+    }
+
+    function showTyping() {
+      const wrap = document.createElement("div");
+      wrap.className = "msg bot";
+      wrap.id = "typing";
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = "\u2708";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble typing";
+      bubble.innerHTML = "<span></span><span></span><span></span>";
+
+      wrap.appendChild(avatar);
+      wrap.appendChild(bubble);
+      messagesEl.appendChild(wrap);
+      scrollBottom();
+    }
+
+    function hideTyping() {
+      const el = document.getElementById("typing");
+      if (el) el.remove();
+    }
+
+    async function sendMessage(text) {
+      if (busy || !text.trim()) return;
+      busy = true;
+      sendBtn.disabled = true;
+
+      addMessage("user", text);
+      inputEl.value = "";
+      autoResize();
+      showTyping();
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text }),
+        });
+        const data = await res.json();
+        hideTyping();
+
+        if (data.reply) {
+          addMessage("bot", data.reply);
+        } else {
+          addMessage("bot", "Sorry, something went wrong. Please try again.");
+        }
+      } catch {
+        hideTyping();
+        addMessage("bot", "Connection error. Please check your network and try again.");
+      }
+
+      busy = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+
+    sendBtn.addEventListener("click", function() {
+      sendMessage(inputEl.value);
+    });
+
+    inputEl.addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage(inputEl.value);
+      }
+    });
+
+    function autoResize() {
+      inputEl.style.height = "auto";
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + "px";
+    }
+    inputEl.addEventListener("input", autoResize);
+
+    resetBtn.addEventListener("click", async function() {
+      try {
+        await fetch("/api/reset", { method: "POST" });
+      } catch { /* ignore */ }
+      messagesEl.innerHTML = "";
+      messagesEl.innerHTML = `
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon">&#127758;</div>
+          <h2>Where would you like to go?</h2>
+          <p>Ask me about destinations, itineraries, budgets, packing tips, visa info, and more.</p>
+          <div class="suggestions">
+            <button class="suggestion">Plan a 5-day Japan trip</button>
+            <button class="suggestion">Weekend getaway from NYC</button>
+            <button class="suggestion">Best beaches in Southeast Asia</button>
+            <button class="suggestion">Europe on a budget</button>
+          </div>
+        </div>`;
+      bindSuggestions();
+      inputEl.focus();
+    });
+
+    function bindSuggestions() {
+      document.querySelectorAll(".suggestion").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          sendMessage(btn.textContent);
+        });
+      });
+    }
+    bindSuggestions();
+
+    inputEl.focus();
+  </script>
+</body>
+</html>
