@@ -1,6 +1,6 @@
 # Travel Assistant Chatbot
 
-A travel assistant powered by **Google Gemini** with **tool calling** and an **MCP server** — it fetches real-time weather and currency data automatically when needed. Available as a CLI chatbot, a web UI, and as a standalone MCP API server.
+A travel assistant powered by **Google Gemini** with **tool calling** and an **MCP server** . Available as a CLI chatbot, a web UI, and as a standalone MCP API server.
 
 ---
 
@@ -16,6 +16,7 @@ travel-assistant/
 ├── utils.py           # Logging, input validation, display helpers
 ├── templates/
 │   └── index.html     # Web UI (chat interface)
+├── agent.py           # AI agent — Gemini reasoning + MCP tool calls
 ├── mcp_server.py      # FastAPI MCP server — exposes tools over HTTP
 ├── tool_registry.py   # Tool registry with metadata + parameter schemas
 ├── executor.py        # Safe dynamic tool execution engine
@@ -59,6 +60,16 @@ python app.py
 
 ```bash
 python main.py
+```
+
+**AI Agent** (MCP-powered):
+
+```bash
+# Terminal 1 — start MCP server
+python mcp_server.py
+
+# Terminal 2 — start agent
+python agent.py
 ```
 
 ---
@@ -227,7 +238,7 @@ curl -X POST http://localhost:8000/execute \
 ```json
 {
   "success": true,
-  "result": { ... },
+  "result": { },
   "error": null,
   "execution_time_ms": 83.03
 }
@@ -247,6 +258,53 @@ curl -X POST http://localhost:8000/execute \
 - **Rate limiting**: Use `slowapi` or a reverse proxy (nginx/Caddy)
 - **More tools**: Add function to `tools.py`, call `registry.register(func)` in `mcp_server.py`
 - **Async tools**: The executor already uses a thread pool — swap in `asyncio` native calls for IO-bound tools
+
+---
+
+## AI Agent (`agent.py`)
+
+A ReAct-style agent that uses Gemini for reasoning and calls MCP tools dynamically — no hardcoded keyword matching.
+
+### How It Works
+
+```
+User: "What's the weather in Tokyo?"
+  │
+  ▼
+Agent sends query to Gemini with tool catalog
+  │
+  ▼
+Gemini returns: {"action": "tool_call", "tool_name": "get_weather", ...}
+  │
+  ▼
+Agent calls MCP server: POST /execute
+  │
+  ▼
+Agent feeds tool result back to Gemini
+  │
+  ▼
+Gemini returns: {"action": "respond", "message": "It's 19°C in Tokyo..."}
+  │
+  ▼
+Agent displays final answer to user
+```
+
+### Features
+
+- **LLM-driven decisions**: Gemini decides when to call tools — no `if "weather"` logic
+- **Dynamic tool discovery**: fetches available tools from MCP at startup
+- **Multi-round**: supports chained tool calls (up to 3 rounds per query)
+- **Retry on failure**: retries MCP calls on transient errors
+- **Conversation memory**: maintains full chat history across turns
+- **Structured output**: Gemini responds with JSON (`tool_call` or `respond`)
+
+### Agent Commands
+
+| Command | Description              |
+|---------|--------------------------|
+| `tools` | List available MCP tools |
+| `reset` | Clear conversation       |
+| `exit`  | Quit                     |
 
 ---
 
