@@ -1,6 +1,6 @@
 # Travel Assistant Chatbot
 
-A travel assistant powered by **Google Gemini** with **tool calling** — it fetches real-time weather and currency data automatically when needed. Available as both a CLI chatbot and a web UI.
+A travel assistant powered by **Google Gemini** with **tool calling** and an **MCP server** — it fetches real-time weather and currency data automatically when needed. Available as a CLI chatbot, a web UI, and as a standalone MCP API server.
 
 ---
 
@@ -16,6 +16,9 @@ travel-assistant/
 ├── utils.py           # Logging, input validation, display helpers
 ├── templates/
 │   └── index.html     # Web UI (chat interface)
+├── mcp_server.py      # FastAPI MCP server — exposes tools over HTTP
+├── tool_registry.py   # Tool registry with metadata + parameter schemas
+├── executor.py        # Safe dynamic tool execution engine
 ├── requirements.txt   # Python dependencies
 └── .env               # API keys (not committed)
 ```
@@ -155,13 +158,105 @@ Logs are written to `logs/travel_assistant.log` with DEBUG-level detail. Tool ca
 
 ---
 
+## MCP Server
+
+The project includes a **Model Context Protocol (MCP)-style server** built with FastAPI. It exposes all tools over HTTP so any AI agent or client can discover and call them dynamically.
+
+### Architecture
+
+```
+┌──────────────────────────┐
+│   AI Agent / Client      │
+└─────┬──────────┬─────────┘
+      │ GET      │ POST
+      │ /tools   │ /execute
+      ▼          ▼
+┌──────────────────────────┐
+│  mcp_server.py (FastAPI) │
+└─────┬──────────┬─────────┘
+      │          │
+      ▼          ▼
+┌────────────┐ ┌───────────┐
+│  Registry  │ │ Executor  │
+│  (catalog) │ │ (runner)  │
+└────────────┘ └─────┬─────┘
+                     ▼
+              ┌────────────┐
+              │  tools.py  │
+              └────────────┘
+```
+
+### Run the MCP Server
+
+```bash
+python mcp_server.py
+# Server:  http://localhost:8000
+# Swagger: http://localhost:8000/docs
+```
+
+### API Endpoints
+
+| Method | Path       | Description                        |
+|--------|------------|------------------------------------|
+| GET    | `/`        | Health check                       |
+| GET    | `/tools`   | List all tools + parameter schemas |
+| POST   | `/execute` | Execute a tool by name             |
+
+### Example Requests
+
+**List tools:**
+```bash
+curl http://localhost:8000/tools
+```
+
+**Execute weather tool:**
+```bash
+curl -X POST http://localhost:8000/execute \
+  -H "Content-Type: application/json" \
+  -d '{"tool_name": "get_weather", "parameters": {"city": "Goa", "country": "India"}}'
+```
+
+**Execute currency tool:**
+```bash
+curl -X POST http://localhost:8000/execute \
+  -H "Content-Type: application/json" \
+  -d '{"tool_name": "get_currency_rate", "parameters": {"from_currency": "USD", "to_currency": "INR", "amount": 100}}'
+```
+
+**Response format** (all endpoints):
+```json
+{
+  "success": true,
+  "result": { ... },
+  "error": null,
+  "execution_time_ms": 83.03
+}
+```
+
+### MCP Components
+
+| File                | Role                                                         |
+|---------------------|--------------------------------------------------------------|
+| `tool_registry.py`  | Registers tools + auto-extracts param schemas from signatures |
+| `executor.py`       | Validates params, runs tools safely, returns structured results |
+| `mcp_server.py`     | FastAPI app with routes, CORS, logging middleware, error handling |
+
+### Scaling Suggestions
+
+- **Auth**: Add API key or OAuth2 middleware to protect `/execute`
+- **Rate limiting**: Use `slowapi` or a reverse proxy (nginx/Caddy)
+- **More tools**: Add function to `tools.py`, call `registry.register(func)` in `mcp_server.py`
+- **Async tools**: The executor already uses a thread pool — swap in `asyncio` native calls for IO-bound tools
+
+---
+
 ## Adding New Tools
 
 1. Add a function to `tools.py` with a clear docstring and type hints
-2. Import and add it to the `tools=[...]` list in `config.py`
-3. Mention it in the system prompt so Gemini knows when to use it
+2. **For Gemini chatbot**: Import and add it to the `tools=[...]` list in `config.py`; mention it in the system prompt
+3. **For MCP server**: Call `registry.register(your_func)` in `_register_tools()` inside `mcp_server.py`
 
-The SDK auto-generates the schema from the function signature. No manual JSON schema needed.
+Both the Gemini SDK and the MCP registry auto-generate schemas from function signatures and docstrings. No manual JSON schema needed.
 
 ---
 
